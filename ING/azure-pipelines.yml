@@ -1,0 +1,145 @@
+trigger:
+  - master
+
+schedules:
+  - cron: "0 0 * * *"
+    displayName: "Nightly build"
+    branches:
+      include:
+        - master
+    always: true
+
+strategy:
+  matrix:
+    linux_go_1_11:
+      imageName: ubuntu-16.04
+      goVersion: 1.11.9
+    linux_go_1_12:
+      imageName: ubuntu-16.04
+      goVersion: 1.12.4
+    mac_go1_12:
+      imageName: macOS-10.14
+      goVersion: 1.12.5
+
+pool:
+  vmImage: $(imageName)
+
+variables:
+  GOBIN:  '$(GOPATH)/bin' # Go binaries path
+  GOPATH: '$(system.defaultWorkingDirectory)/gopath' # Go workspace path
+  modulePath: '$(system.defaultWorkingDirectory)/src/github.com/$(build.repository.name)' # Path to the module's code
+
+steps:
+  - task: GoTool@0
+    inputs:
+      version: $(goVersion)
+      goPath: $(GOPATH)
+      goBin: $(GOBIN)
+
+  - task: UseRubyVersion@0
+    inputs:
+      versionSpec: '>= 2.3'
+      addToPath: true
+
+  - script: |
+      mkdir -p '$(GOBIN)'
+      mkdir -p '$(GOPATH)/pkg'
+      mkdir -p '$(modulePath)'
+      shopt -s extglob
+      shopt -s dotglob
+      mv !(gopath) '$(modulePath)'
+      echo '##vso[task.prependpath]$(GOBIN)'
+      echo '##vso[task.prependpath]$(GOROOT)/bin'
+    displayName: 'Set up the Go workspace'
+
+  - script: |
+      go version
+      go get -v -d ./...
+      go build -v .
+    workingDirectory: '$(modulePath)'
+    displayName: 'Get dependencies, then build'
+
+  - script: |
+      curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b $(go env GOPATH)/bin v1.17.1
+      golangci-lint run -v
+    workingDirectory: '$(modulePath)'
+    displayName: 'golangci-lint'
+
+  # errcheck can also be run as part of golangci-lint, but for some reason it then ignores the standard excludes
+  - script: |
+      mkdir -p $(go env GOPATH)/src/github.com/kisielk/errcheck
+      curl -sfL -o $(go env GOPATH)/src/github.com/kisielk/errcheck.tar.gz https://github.com/kisielk/errcheck/archive/v1.2.0.tar.gz
+      tar xzf $(go env GOPATH)/src/github.com/kisielk/errcheck.tar.gz --directory $(go env GOPATH)/src/github.com/kisielk/errcheck --strip-components=1
+      cd  $(go env GOPATH)/src/github.com/kisielk/errcheck && go get ./... &&  go install && cd -
+      errcheck -verbose -ignoretests ./...
+    workingDirectory: '$(modulePath)'
+    displayName: 'errcheck'
+
+  - task: DownloadGitHubRelease@0
+    displayName: 'Download cache from release on GitHub'
+    inputs:
+      connection: GitHub
+      userRepository: 'mvdbos/owasp-dep-check-cache-builder'
+      defaultVersionType: 'specificTag'
+      version: 'latest'
+      downloadPath: '$(Pipeline.Workspace)/owasp-cache/'
+
+  - script: |
+      curl -sfL -o $(system.defaultWorkingDirectory)/dependency-check.zip https://dl.bintray.com/jeremy-long/owasp/dependency-check-5.1.0-release.zip
+      unzip $(system.defaultWorkingDirectory)/dependency-check.zip -d $(system.defaultWorkingDirectory)
+      $(system.defaultWorkingDirectory)/dependency-check/bin/dependency-check.sh --suppress .owasp-deps-suppress.xml --cveValidForHours 4 --data $(Pipeline.Workspace)/owasp-cache --enableExperimental --scan $(modulePath) --format HTML --out $(Build.ArtifactStagingDirectory)/dependency-check
+    workingDirectory: '$(modulePath)'
+    displayName: 'OWASP Dependency Check'
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish OWASP report'
+    continueOnError: true
+    inputs:
+      pathtoPublish: $(Build.ArtifactStagingDirectory)/dependency-check
+      artifactName: OWASP-dependency-check-report
+
+  - script: |
+      gem install license_finder
+      license_finder --decisions-file=.license-finder.yml
+    workingDirectory: '$(modulePath)'
+    displayName: 'license-finder'
+
+  # https://github.com/psampaz/go-mod-outdated/archive/v0.3.0.tar.gz
+  - script: |
+      mkdir -p $(go env GOPATH)/src/github.com/psampaz/go-mod-outdated
+      curl -sfL -o $(go env GOPATH)/src/github.com/psampaz/go-mod-outdated.tar.gz https://github.com/psampaz/go-mod-outdated/archive/v0.3.0.tar.gz
+      tar xzf $(go env GOPATH)/src/github.com/psampaz/go-mod-outdated.tar.gz --directory $(go env GOPATH)/src/github.com/psampaz/go-mod-outdated --strip-components=1
+      cd  $(go env GOPATH)/src/github.com/psampaz/go-mod-outdated && go get ./... &&  go install && cd -
+      go list -u -m -json all | go-mod-outdated -update -direct
+    workingDirectory: '$(modulePath)'
+    displayName: 'go-mod-outdated'
+
+  - script: |
+      go get -u github.com/jstemmer/go-junit-report
+      go get github.com/axw/gocov/gocov
+      go get github.com/AlekSi/gocov-xml
+      go test -v -coverprofile=coverage.out -covermode count ./... 2>&1 | go-junit-report > $(Pipeline.Workspace)/junit.xml
+      gocov convert coverage.out > coverage.json
+      gocov-xml < coverage.json > $(Pipeline.Workspace)/coverage.xml
+    workingDirectory: '$(modulePath)'
+    displayName: 'Run tests'
+
+  - task: PublishTestResults@2
+    inputs:
+      testRunner: JUnit
+      testResultsFiles: $(Pipeline.Workspace)/junit.xml
+
+  - task: PublishCodeCoverageResults@1
+    inputs:
+      codeCoverageTool: Cobertura
+      summaryFileLocation: $(Pipeline.Workspace)/coverage.xml
+
+
+  # NOTE: this requires (free) installation in the Azure organisation of:
+  # https://marketplace.visualstudio.com/items?itemName=mspremier.BuildQualityChecks
+  - task: BuildQualityChecks@5
+    inputs:
+      checkCoverage: true
+      coverageFailOption: 'fixed'
+      coverageType: 'lines'
+      coverageThreshold: '80'

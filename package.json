@@ -1,0 +1,17 @@
+{
+  "name": "ZKPdemo",
+  "version": "1.0.0",
+  "description": "Blockchain and Trusted Decentralized Identity: Zero-Knowledge Proof of Identity for Attribute-Based Self-Sovereign Identity Management",
+  "main": "index.js",
+  "author": "Christoph Leixnering",
+  "license": "MIT",
+  "dependencies": {
+    "child_process": "^1.0.2",
+    "ethereumjs-tx": "^2.1.0",
+    "js-sproof-client": "^1.0.34",
+    "solc": "^0.5.10",
+    "sproof-schema": "0.0.6",
+    "sproof-utils": "0.0.10",
+    "web3": "^1.2.1"
+  }
+}

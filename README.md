@@ -7,6 +7,6 @@ The implementation is based on the following open source projects:
 * Toolbox for creating and verifying SNARK Proofs on Ethereum [ZoKrates](https://github.com/Zokrates/ZoKrates)
 * Library for creating and verifying Bulletproofs [ING-Bank ZKRP](https://github.com/ing-bank/zkrp)
 
-**Thanks to the developers of these great components for making them available for the community!**
+**Thanks to the developers for creating these awesome components and making them available to the community!**
 
 A short usage guide is following soon.
