@@ -6,6 +6,7 @@ The implementation is based on the following open source projects:
 * Protokoll for managing digital documents [SPROOF](https://github.com/sproof)
 * Toolbox for creating and verifying SNARK Proofs on Ethereum [ZoKrates](https://github.com/Zokrates/ZoKrates)
 * Library for creating and verifying Bulletproofs [ING-Bank ZKRP](https://github.com/ing-bank/zkrp)
+
 **Thanks to the developers of these great components for making them available for the community!**
 
 A short usage guide is following soon.
