@@ -9,9 +9,9 @@ The implementation is based on the following open source projects:
 
 **Thanks to the developers for creating these awesome components and making them available to the community!**
 
-## Short usage guide
+## Short usage and installation guide
 
-The project was created on a Windows operating system. Therefore, the SNARK proof and Bulletproof executables are only included for Windows 64Bit.
+The project was created on a Windows operating system. Therefore, the SNARK proof and Bulletproof executables are only included for Windows (64 bit).
 Before the ZoKrates toolbox can be used, an environment variable with the name ZOKRATES_HOME and the absolute path to the stdlib folder contained in the toolbox must be defined.
 
 ### Install node packages
